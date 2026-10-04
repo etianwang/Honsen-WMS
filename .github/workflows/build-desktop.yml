@@ -2,7 +2,7 @@ name: Build desktop exe
 
 on:
   push:
-    branches: [Rebuild]
+    branches: [main]
   workflow_dispatch: {}
 
 jobs:

@@ -1,5 +1,5 @@
 #pragma charset "utf-8"
-; Compile with: ISCC.exe /DAppVersion=1.2.1 installer\HonsenWMS.iss
+; Compile with: ISCC.exe /DAppVersion=1.2.2 installer\HonsenWMS.iss
 #ifndef AppVersion
   #error AppVersion must be supplied by the build script.
 #endif

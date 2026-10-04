@@ -1,6 +1,6 @@
 # Honsen 工具箱应用识别
 
-本应用的永久标识为 `honsen.wms`，产品名为 **Honsen WMS**，当前发布版本为 `1.2.1`。
+本应用的永久标识为 `honsen.wms`，产品名为 **Honsen WMS**，当前发布版本为 `1.2.2`。
 
 桌面构建会生成 Inno Setup 安装器 `dist/HonsenWMS-<version>-Setup.exe`，它保留 Windows 控制面板卸载项，并在安装、升级、卸载时维护 Honsen 工具箱协议。构建环境需安装 Inno Setup 6。
 
