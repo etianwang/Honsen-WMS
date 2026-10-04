@@ -36,6 +36,11 @@ Write-Host "==> Create empty dist\db"
 New-Item -ItemType Directory -Path $DistDb -Force | Out-Null
 
 $ExeName = "Honsen海外仓库管理同步版.exe"
+$ManifestWriter = Join-Path $Root "scripts\write-honsen-app-manifest.py"
+$InstallerScript = Join-Path $Root "scripts\Install-HonsenWms.ps1"
+python $ManifestWriter $Dist
+if ($LASTEXITCODE -ne 0) { throw "write honsen.app.json failed" }
+Copy-Item $InstallerScript (Join-Path $Dist "Install-HonsenWms.ps1") -Force
 Write-Host ("Done: " + (Join-Path $Dist $ExeName))
 Write-Host "Note: dist\db is empty; init DB from login page on first run."
 

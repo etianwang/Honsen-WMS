@@ -62,6 +62,8 @@ python desktop/launcher.py
 # 输出：dist\Honsen WMS.exe
 ```
 
+Windows 安装、升级、卸载及 Honsen 工具箱识别协议见 [docs/honsen-toolbox-protocol.md](docs/honsen-toolbox-protocol.md)。
+
 数据库：`db/honsen_storage.db`（exe 旁 `db/` 目录）。初始化见 React 登录页「初始化数据库」。
 
 ---

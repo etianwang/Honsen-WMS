@@ -29,6 +29,11 @@ def main() -> None:
     portable.mkdir(parents=True)
 
     shutil.copy2(exe_path, portable / exe_name)
+    for filename in ("honsen.app.json", "Install-HonsenWms.ps1"):
+        source = DIST / filename
+        if not source.is_file():
+            raise SystemExit(f"Missing package file: {source}")
+        shutil.copy2(source, portable / filename)
     (portable / "db").mkdir()
     (portable / "README.txt").write_text(
         "Honsen WMS Sync Edition - Portable Package\n\n"
