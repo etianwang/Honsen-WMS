@@ -25,6 +25,10 @@ jobs:
           cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --yes --no-progress
+
       - name: Run build-desktop.ps1
         shell: pwsh
         run: .\scripts\build-desktop.ps1

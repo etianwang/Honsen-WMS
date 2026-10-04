@@ -47,3 +47,14 @@ Write-Host "Note: dist\db is empty; init DB from login page on first run."
 Write-Host "==> Assemble portable zip (no WebView2)"
 python "$Root\scripts\assemble_portable.py"
 if ($LASTEXITCODE -ne 0) { throw "assemble_portable failed" }
+
+$Iscc = Get-Command ISCC.exe -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Source -First 1
+if (-not $Iscc) {
+    $Iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+}
+if (-not (Test-Path $Iscc)) { throw "Inno Setup 6 is required to build the installer. Install it from https://jrsoftware.org/isdl.php" }
+
+$AppVersion = (Get-Content "$Root\desktop\honsen-app-metadata.json" -Raw -Encoding UTF8 | ConvertFrom-Json).version
+Write-Host "==> Build Inno Setup installer"
+& $Iscc "/DAppVersion=$AppVersion" "$Root\installer\HonsenWMS.iss"
+if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }

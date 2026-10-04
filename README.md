@@ -59,7 +59,7 @@ python desktop/launcher.py
 
 # 一键打包 exe
 .\scripts\build-desktop.ps1
-# 输出：dist\Honsen WMS.exe
+# 输出：dist\Honsen海外仓库管理同步版.exe、便携 zip、Inno Setup.exe
 ```
 
 Windows 安装、升级、卸载及 Honsen 工具箱识别协议见 [docs/honsen-toolbox-protocol.md](docs/honsen-toolbox-protocol.md)。
