@@ -58,17 +58,54 @@ begin
   Result := CompareText(RemoveBackslashUnlessRoot(ExpandFileName(Left)), RemoveBackslashUnlessRoot(ExpandFileName(Right))) = 0;
 end;
 
+function RootName(Root: Integer): String;
+begin
+  if Root = HKLM then Result := 'HKLM' else Result := 'HKCU';
+end;
+
+function ReadRegistryString(Root, View: Integer; const Name: String; var Value: String): Boolean;
+var
+  OutputFile, Parameters, Line: String;
+  ExitCode, Index, Marker: Integer;
+  Lines: TArrayOfString;
+begin
+  OutputFile := ExpandConstant('{tmp}\honsen-wms-reg.txt');
+  Parameters := '/C reg query "' + RootName(Root) + '\' + HonsenKey + '" /v "' + Name + '" /reg:' + IntToStr(View) + ' > "' + OutputFile + '"';
+  Result := Exec(ExpandConstant('{cmd}'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) and (ExitCode = 0) and LoadStringsFromFile(OutputFile, Lines);
+  DeleteFile(OutputFile);
+  if not Result then exit;
+  Result := False;
+  for Index := 0 to GetArrayLength(Lines) - 1 do begin
+    Line := Lines[Index];
+    Marker := Pos('REG_SZ', Line);
+    if Marker > 0 then begin
+      Value := Trim(Copy(Line, Marker + Length('REG_SZ'), MaxInt));
+      Result := True;
+      exit;
+    end;
+  end;
+end;
+
+procedure WriteRegistryString(Root, View: Integer; const Name, Value: String);
+var
+  Parameters: String;
+  ExitCode: Integer;
+begin
+  Parameters := '/C reg add "' + RootName(Root) + '\' + HonsenKey + '" /v "' + Name + '" /t REG_SZ /d "' + Value + '" /f /reg:' + IntToStr(View);
+  if not Exec(ExpandConstant('{cmd}'), Parameters, '', SW_HIDE, ewWaitUntilTerminated, ExitCode) or (ExitCode <> 0) then
+    RaiseException('Unable to write Honsen Program registry value: ' + Name);
+end;
+
 function ReadRegisteredLocation(Root, View: Integer; var Location: String): Boolean;
 var
   RegisteredId, ExecutablePath: String;
 begin
-  SetRegView(View);
-  Result := RegQueryStringValue(Root, HonsenKey, 'AppId', RegisteredId) and
+  Result := ReadRegistryString(Root, View, 'AppId', RegisteredId) and
             (RegisteredId = '{#AppId}') and
-            RegQueryStringValue(Root, HonsenKey, 'InstallLocation', Location);
+            ReadRegistryString(Root, View, 'InstallLocation', Location);
   if Result then begin
-    RegQueryStringValue(Root, HonsenKey, 'Version', ExistingVersion);
-    ExistingDamaged := not RegQueryStringValue(Root, HonsenKey, 'ExecutablePath', ExecutablePath) or not FileExists(ExecutablePath);
+    ReadRegistryString(Root, View, 'Version', ExistingVersion);
+    ExistingDamaged := not ReadRegistryString(Root, View, 'ExecutablePath', ExecutablePath) or not FileExists(ExecutablePath);
   end;
 end;
 
@@ -119,7 +156,6 @@ begin
     else
       RegisteredView := 32;
   end;
-  SetRegView(RegisteredView);
 end;
 
 function DefaultInstallDir(Param: String): String;
@@ -146,8 +182,7 @@ end;
 
 procedure WriteHonsenValue(const Name, Value: String);
 begin
-  SetRegView(RegisteredView);
-  RegWriteStringValue(HonsenRoot(), HonsenKey, Name, Value);
+  WriteRegistryString(HonsenRoot(), RegisteredView, Name, Value);
 end;
 
 procedure RegisterHonsenApp();
@@ -181,11 +216,11 @@ end;
 procedure RemoveHonsenRegistration(Root, View: Integer);
 var
   InstallLocation: String;
+  ExitCode: Integer;
 begin
-  SetRegView(View);
-  if RegQueryStringValue(Root, HonsenKey, 'InstallLocation', InstallLocation) and
+  if ReadRegistryString(Root, View, 'InstallLocation', InstallLocation) and
      SamePath(InstallLocation, ExpandConstant('{app}')) then
-    RegDeleteKeyIncludingSubkeys(Root, HonsenKey);
+    Exec(ExpandConstant('{cmd}'), '/C reg delete "' + RootName(Root) + '\' + HonsenKey + '" /f /reg:' + IntToStr(View), '', SW_HIDE, ewWaitUntilTerminated, ExitCode);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
