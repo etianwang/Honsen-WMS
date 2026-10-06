@@ -27,9 +27,14 @@ HonsenUpdateRunner.exe apply --source toolbox --app-id honsen.wms --wait-pid <PI
 
 ## 验证结果
 
-- JSON、版本资源生成器和 Runner 均通过 Python 语法检查。
-- Inno 脚本包含唯一目录、注册表、Runner 快捷方式和静默卸载逻辑；需要在 Windows CI 的 Inno Setup 环境做最终编译验证。
-- 未实现后台更新检查、下载或自动安装；WMS 启动路径不会访问网络。
+| 场景 | 结果 |
+| --- | --- |
+| Windows CI 编译 | 通过：`v1.2.3` 安装器、Runner、便携包和 `.sha256` 均已生成。 |
+| 首次静默安装到指定目录 | 通过：`/DIR` 指向工作区测试目录后，HKCU 注册表、主 EXE、Runner 和 UTF-8 manifest 均存在且一致。 |
+| Runner `apply` | 已完成静态/构建验证；本机端到端调用被执行环境的进程安全策略拦截，命令未启动。工具箱可在受控 Windows 环境按上面的命令复测。 |
+| 静默卸载 | 通过：Inno `unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-` 移除了测试目录及 `honsen.wms` 的 HKCU 注册项。 |
+| 未确认不更新 | 通过设计：WMS 与 Runner 均无网络下载代码；只有工具箱显式调用 `apply` 才会进入安装路径。 |
+| launch 不自动更新 | 通过代码检查：`launch` 仅读取注册信息/manifest 并启动主 EXE，不访问网络。 |
 
 安装后可执行：
 
