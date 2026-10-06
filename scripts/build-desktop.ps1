@@ -12,6 +12,10 @@ Write-Host "==> Build app icon logo.ico"
 python "$Root\scripts\build_app_icon.py"
 if ($LASTEXITCODE -ne 0) { throw "build_app_icon failed" }
 
+Write-Host "==> Generate Windows version metadata"
+python "$Root\scripts\write-honsen-app-manifest.py" --version-info "$Root\desktop\windows-version-info.txt"
+if ($LASTEXITCODE -ne 0) { throw "write Windows version metadata failed" }
+
 Write-Host "==> Build React frontend (static export)"
 Push-Location "$Root\frontend"
 if (-not (Test-Path "node_modules")) { npm install }
@@ -23,6 +27,8 @@ Write-Host "==> PyInstaller package exe"
 Push-Location "$Root"
 pyinstaller "$Root\desktop\honsen_wms.spec" --noconfirm
 if ($LASTEXITCODE -ne 0) { throw "pyinstaller failed" }
+pyinstaller "$Root\desktop\honsen_update_runner.spec" --noconfirm
+if ($LASTEXITCODE -ne 0) { throw "pyinstaller update runner failed" }
 Pop-Location
 
 $Dist = Join-Path $Root "dist"
@@ -58,3 +64,7 @@ $AppVersion = (Get-Content "$Root\desktop\honsen-app-metadata.json" -Raw -Encodi
 Write-Host "==> Build Inno Setup installer"
 & $Iscc "/DAppVersion=$AppVersion" "$Root\installer\HonsenWMS.iss"
 if ($LASTEXITCODE -ne 0) { throw "Inno Setup build failed" }
+
+$Setup = Get-ChildItem "$Dist\HonsenWMS-$AppVersion-Setup.exe" -ErrorAction Stop
+$SetupHash = (Get-FileHash -LiteralPath $Setup.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+[IO.File]::WriteAllText("$($Setup.FullName).sha256", "$SetupHash  $($Setup.Name)`n", [Text.UTF8Encoding]::new($false))

@@ -1,0 +1,251 @@
+"""The only component allowed to launch or update Honsen WMS on Windows."""
+from __future__ import annotations
+
+import argparse
+import ctypes
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+import time
+import uuid
+from contextlib import contextmanager
+from datetime import datetime, timezone
+from pathlib import Path
+
+APP_ID = "honsen.wms"
+UPDATE_URL = "https://api.github.com/repos/etianwang/Honsen-WMS/releases/latest"
+MUTEX_NAME = r"Global\HonsenUpdate-honsen_wms"
+
+
+class RunnerError(RuntimeError):
+    pass
+
+
+def now() -> str:
+    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+def normalized(path: str | Path) -> str:
+    return os.path.normcase(os.path.realpath(os.path.abspath(path)))
+
+
+def write_result(path: str, payload: dict) -> None:
+    destination = Path(path)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_suffix(destination.suffix + ".tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, destination)
+
+
+def result_path(value: str | None, operation_id: str) -> str:
+    return value or str(Path(tempfile.gettempdir()) / "Honsen Program" / "UpdateRunner" / operation_id / "result.json")
+
+
+def registry_record() -> dict:
+    if os.name != "nt":
+        raise RunnerError("HonsenUpdateRunner is supported on Windows only")
+    import winreg
+
+    values = ("AppId", "DisplayName", "Version", "InstallLocation", "ExecutablePath", "LauncherPath", "UpdateRunnerPath", "InstallScope", "Publisher", "UpdateManifestUrl", "UpdateUrl")
+    key_path = rf"Software\Honsen Program\Apps\{APP_ID}"
+    for root, scope in ((winreg.HKEY_LOCAL_MACHINE, "machine"), (winreg.HKEY_CURRENT_USER, "user")):
+        try:
+            with winreg.OpenKey(root, key_path) as key:
+                record = {name: winreg.QueryValueEx(key, name)[0] for name in values}
+        except FileNotFoundError:
+            continue
+        if record["AppId"] == APP_ID and record["InstallScope"] == scope:
+            record["_scope"] = scope
+            return record
+    raise RunnerError("No valid honsen.wms registration was found")
+
+
+def validate_install(record: dict, target_dir: str | None = None) -> dict:
+    install = normalized(record["InstallLocation"])
+    if target_dir and normalized(target_dir) != install:
+        raise RunnerError("target-dir does not match the registered InstallLocation")
+    manifest_path = Path(install) / "honsen.app.json"
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RunnerError(f"Invalid honsen.app.json: {exc}") from exc
+    executable = Path(install) / manifest.get("executable", "")
+    runner = Path(install) / manifest.get("updateRunner", "")
+    if manifest.get("appId") != APP_ID or manifest.get("updateManifestUrl") != UPDATE_URL:
+        raise RunnerError("Manifest identity or update URL is invalid")
+    if normalized(executable) != normalized(record["ExecutablePath"]) or not executable.is_file():
+        raise RunnerError("Registered ExecutablePath does not match the installed main executable")
+    if normalized(runner) != normalized(record["LauncherPath"]) or normalized(runner) != normalized(record["UpdateRunnerPath"]) or not runner.is_file():
+        raise RunnerError("Registered runner path does not match the installed runner")
+    if record["UpdateManifestUrl"] != UPDATE_URL or record["UpdateUrl"] != UPDATE_URL:
+        raise RunnerError("Registered update URL is invalid")
+    return {"install": install, "manifest": manifest, "executable": executable, "runner": runner}
+
+
+def sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    try:
+        with open(path, "rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as exc:
+        raise RunnerError(f"Unable to read installer: {exc}") from exc
+    return digest.hexdigest()
+
+
+def file_version(path: Path) -> str:
+    if os.name != "nt":
+        raise RunnerError("File version verification is supported on Windows only")
+    version = ctypes.windll.version
+    size = version.GetFileVersionInfoSizeW(str(path), None)
+    if not size:
+        raise RunnerError(f"Missing Windows file version: {path}")
+    buffer = ctypes.create_string_buffer(size)
+    if not version.GetFileVersionInfoW(str(path), 0, size, buffer):
+        raise RunnerError(f"Unable to read Windows file version: {path}")
+    pointer = ctypes.c_void_p()
+    length = ctypes.c_uint()
+    if not version.VerQueryValueW(buffer, "\\", ctypes.byref(pointer), ctypes.byref(length)):
+        raise RunnerError(f"Unable to query Windows file version: {path}")
+
+    class FixedFileInfo(ctypes.Structure):
+        _fields_ = [("signature", ctypes.c_uint32), ("struct_version", ctypes.c_uint32), ("file_ms", ctypes.c_uint32), ("file_ls", ctypes.c_uint32)]
+
+    info = ctypes.cast(pointer, ctypes.POINTER(FixedFileInfo)).contents
+    parts = [info.file_ms >> 16, info.file_ms & 0xFFFF, info.file_ls >> 16, info.file_ls & 0xFFFF]
+    while len(parts) > 3 and parts[-1] == 0:
+        parts.pop()
+    return ".".join(map(str, parts))
+
+
+def wait_for_wms(pid: int, executable: Path) -> None:
+    if not pid:
+        return
+    kernel32 = ctypes.windll.kernel32
+    process = kernel32.OpenProcess(0x00100000 | 0x1000 | 0x0001, False, pid)
+    if not process:
+        return  # The requested process has already exited.
+    try:
+        size = ctypes.c_uint(32768)
+        image = ctypes.create_unicode_buffer(size.value)
+        if not kernel32.QueryFullProcessImageNameW(process, 0, image, ctypes.byref(size)):
+            raise RunnerError("Unable to verify the requested process path")
+        if normalized(image.value) != normalized(executable):
+            raise RunnerError("wait-pid is not the registered Honsen WMS process")
+        if kernel32.WaitForSingleObject(process, 30000) == 0x102:
+            if not kernel32.TerminateProcess(process, 0) or kernel32.WaitForSingleObject(process, 5000) == 0x102:
+                raise RunnerError("Honsen WMS did not exit within 30 seconds")
+    finally:
+        kernel32.CloseHandle(process)
+
+
+@contextmanager
+def update_lock():
+    kernel32 = ctypes.windll.kernel32
+    handle = kernel32.CreateMutexW(None, False, MUTEX_NAME)
+    if not handle:
+        raise RunnerError("Unable to create update mutex")
+    try:
+        if kernel32.GetLastError() == 183:
+            raise RunnerError("Another Honsen WMS update is already running")
+        yield
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def launch(args: argparse.Namespace) -> dict:
+    record = registry_record()
+    state = validate_install(record)
+    subprocess.Popen([str(state["executable"])], cwd=state["install"])
+    return {"status": "success", "operationId": args.operation_id, "appId": APP_ID, "source": args.source, "oldVersion": record["Version"], "newVersion": record["Version"], "installLocation": state["install"], "executablePath": str(state["executable"]), "completedAt": now()}
+
+
+def relocate_and_run() -> int:
+    operation_id = next((sys.argv[index + 1] for index, value in enumerate(sys.argv) if value == "--operation-id"), str(uuid.uuid4()))
+    target = Path(tempfile.gettempdir()) / "Honsen Program" / "UpdateRunner" / operation_id / "HonsenUpdateRunner.exe"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(sys.executable, target)
+    return subprocess.run([str(target), *sys.argv[1:], "--relocated"], check=False).returncode
+
+
+def apply(args: argparse.Namespace) -> dict:
+    if args.source != "toolbox":
+        raise RunnerError("apply is restricted to the Honsen toolbox")
+    if not getattr(sys, "frozen", False) and not args.relocated:
+        raise RunnerError("apply must run from the packaged HonsenUpdateRunner.exe")
+    if getattr(sys, "frozen", False) and not args.relocated:
+        raise SystemExit(relocate_and_run())
+    step = "validate"
+    exit_code: int | None = None
+    log_path = ""
+    try:
+        with update_lock():
+            record = registry_record()
+            old_version = record["Version"]
+            state = validate_install(record, args.target_dir)
+            if state["manifest"].get("version") != old_version:
+                raise RunnerError("Manifest and registry versions differ before update")
+            step = "sha256"
+            if sha256(args.installer).lower() != args.sha256.lower():
+                raise RunnerError("Installer SHA-256 does not match")
+            step = "wait"
+            wait_for_wms(args.wait_pid, state["executable"])
+            step = "install"
+            log_path = str(Path(tempfile.gettempdir()) / "Honsen Program" / "UpdateRunner" / args.operation_id / "installer.log")
+            Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+            exit_code = subprocess.run([args.installer, "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-", f"/DIR={state['install']}", f"/LOG={log_path}"], check=False).returncode
+            if exit_code != 0 or not Path(log_path).is_file():
+                raise RunnerError("Inno Setup update failed")
+            step = "verify"
+            updated_record = registry_record()
+            updated = validate_install(updated_record, state["install"])
+            if updated_record["Version"] != args.expected_version or updated["manifest"].get("version") != args.expected_version or file_version(updated["executable"]) != args.expected_version:
+                raise RunnerError("Updated version verification failed")
+            if args.restart == "true":
+                subprocess.Popen([str(updated["executable"])], cwd=updated["install"])
+            return {"status": "success", "operationId": args.operation_id, "appId": APP_ID, "source": args.source, "oldVersion": old_version, "newVersion": args.expected_version, "installLocation": updated["install"], "executablePath": str(updated["executable"]), "completedAt": now()}
+    except RunnerError as exc:
+        return {"status": "failed", "operationId": args.operation_id, "appId": APP_ID, "failureStep": step, "installerExitCode": exit_code, "logPath": log_path, "error": str(exc), "completedAt": now()}
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser()
+    commands = root.add_subparsers(dest="command", required=True)
+    for name in ("launch", "apply"):
+        command = commands.add_parser(name)
+        command.add_argument("--app-id", required=True)
+        command.add_argument("--source", required=True)
+        command.add_argument("--operation-id", default=str(uuid.uuid4()))
+        command.add_argument("--result-path")
+    launch_command = commands.choices["launch"]
+    launch_command.add_argument("--wait-pid", type=int, default=0)
+    apply_command = commands.choices["apply"]
+    apply_command.add_argument("--wait-pid", type=int, required=True)
+    apply_command.add_argument("--installer", required=True)
+    apply_command.add_argument("--sha256", required=True)
+    apply_command.add_argument("--target-dir", required=True)
+    apply_command.add_argument("--expected-version", required=True)
+    apply_command.add_argument("--restart", choices=("true", "false"), required=True)
+    apply_command.add_argument("--relocated", action="store_true", help=argparse.SUPPRESS)
+    return root
+
+
+def main() -> int:
+    args = parser().parse_args()
+    if args.app_id != APP_ID:
+        raise SystemExit("Unsupported app-id")
+    args.result_path = result_path(args.result_path, args.operation_id)
+    try:
+        payload = apply(args) if args.command == "apply" else launch(args)
+    except RunnerError as exc:
+        payload = {"status": "failed", "operationId": args.operation_id, "appId": APP_ID, "failureStep": "validate", "installerExitCode": None, "logPath": "", "error": str(exc), "completedAt": now()}
+    write_result(args.result_path, payload)
+    return 0 if payload["status"] == "success" else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

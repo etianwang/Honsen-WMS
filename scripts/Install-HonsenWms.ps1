@@ -31,7 +31,8 @@ if ($Action -eq "Uninstall") {
 }
 
 $SourceExe = Join-Path $SourceRoot ([string]$Manifest.executable)
-if (-not (Test-Path -LiteralPath $SourceExe -PathType Leaf)) {
+$SourceRunner = Join-Path $SourceRoot ([string]$Manifest.updateRunner)
+if (-not (Test-Path -LiteralPath $SourceExe -PathType Leaf) -or -not (Test-Path -LiteralPath $SourceRunner -PathType Leaf)) {
     throw "Missing application executable: $SourceExe"
 }
 
@@ -46,7 +47,9 @@ if ([string]::IsNullOrWhiteSpace($InstallLocation)) {
 $InstallLocation = [IO.Path]::GetFullPath($InstallLocation)
 New-Item -ItemType Directory -Path $InstallLocation -Force | Out-Null
 $ExecutablePath = Join-Path $InstallLocation ([string]$Manifest.executable)
+$RunnerPath = Join-Path $InstallLocation ([string]$Manifest.updateRunner)
 Copy-Item -LiteralPath $SourceExe -Destination $ExecutablePath -Force
+Copy-Item -LiteralPath $SourceRunner -Destination $RunnerPath -Force
 $InstalledScriptPath = Join-Path $InstallLocation "Install-HonsenWms.ps1"
 if ([IO.Path]::GetFullPath($PSCommandPath) -ne [IO.Path]::GetFullPath($InstalledScriptPath)) {
     Copy-Item -LiteralPath $PSCommandPath -Destination $InstalledScriptPath -Force
@@ -62,9 +65,12 @@ $Values = [ordered]@{
     Version = [string]$Manifest.version
     InstallLocation = $InstallLocation
     ExecutablePath = $ExecutablePath
+    LauncherPath = $RunnerPath
+    UpdateRunnerPath = $RunnerPath
     InstallScope = $Scope
     Publisher = [string]$Manifest.publisher
     UpdateManifestUrl = [string]$Manifest.updateManifestUrl
+    UpdateUrl = [string]$Manifest.updateManifestUrl
 }
 foreach ($Name in $Values.Keys) {
     New-ItemProperty -Path $RegistryPath -Name $Name -Value $Values[$Name] -PropertyType String -Force | Out-Null

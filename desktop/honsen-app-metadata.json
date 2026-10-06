@@ -2,8 +2,9 @@
   "schemaVersion": 1,
   "appId": "honsen.wms",
   "displayName": "Honsen WMS",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "executable": "Honsen海外仓库管理同步版.exe",
+  "updateRunner": "HonsenUpdateRunner.exe",
   "publisher": "Honsen",
-  "updateManifestUrl": ""
+  "updateManifestUrl": "https://api.github.com/repos/etianwang/Honsen-WMS/releases/latest"
 }

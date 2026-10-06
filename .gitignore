@@ -213,3 +213,5 @@ __marimo__/
 /sync_settings.json
 .DS_Store
 .claude/settings.local.json
+# Generated from desktop/honsen-app-metadata.json during Windows builds.
+desktop/windows-version-info.txt

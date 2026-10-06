@@ -8,12 +8,15 @@ block_cipher = None
 root = Path(SPEC).resolve().parent.parent
 frontend_out = root / "frontend" / "out"
 icon_path = root / "logo.ico"
+version_info = root / "desktop" / "windows-version-info.txt"
 
 if not (frontend_out / "index.html").exists():
     raise SystemExit("请先构建前端：cd frontend && npm run build:desktop")
 
 if not icon_path.is_file():
     raise SystemExit(f"未找到应用图标：{icon_path}")
+if not version_info.is_file():
+    raise SystemExit(f"未找到 Windows 版本信息：{version_info}")
 
 datas = [
     (str(frontend_out), "frontend/out"),
@@ -84,4 +87,5 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=str(icon_path),
+    version=str(version_info),
 )

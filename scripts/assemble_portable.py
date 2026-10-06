@@ -29,7 +29,7 @@ def main() -> None:
     portable.mkdir(parents=True)
 
     shutil.copy2(exe_path, portable / exe_name)
-    for filename in ("honsen.app.json", "Install-HonsenWms.ps1"):
+    for filename in ("HonsenUpdateRunner.exe", "honsen.app.json", "Install-HonsenWms.ps1"):
         source = DIST / filename
         if not source.is_file():
             raise SystemExit(f"Missing package file: {source}")
