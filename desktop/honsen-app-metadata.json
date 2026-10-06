@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "appId": "honsen.wms",
   "displayName": "Honsen WMS",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "executable": "Honsen海外仓库管理同步版.exe",
   "updateRunner": "HonsenUpdateRunner.exe",
   "publisher": "Honsen",

@@ -1,4 +1,4 @@
-; Compile with: ISCC.exe /DAppVersion=1.2.3 installer\HonsenWMS.iss
+; Compile with: ISCC.exe /DAppVersion=1.2.4 installer\HonsenWMS.iss
 #ifndef AppVersion
   #error AppVersion must be supplied by the build script.
 #endif
@@ -48,32 +48,52 @@ const
 
 var
   RegisteredRoot: Integer;
+  RegisteredView: Integer;
   ExistingLocation: String;
+  ExistingVersion: String;
+  ExistingDamaged: Boolean;
 
 function SamePath(const Left, Right: String): Boolean;
 begin
   Result := CompareText(RemoveBackslashUnlessRoot(ExpandFileName(Left)), RemoveBackslashUnlessRoot(ExpandFileName(Right))) = 0;
 end;
 
-function ReadRegisteredLocation(Root: Integer; var Location: String): Boolean;
+function ReadRegisteredLocation(Root, View: Integer; var Location: String): Boolean;
 var
-  RegisteredId: String;
+  RegisteredId, ExecutablePath: String;
 begin
+  SetRegView(View);
   Result := RegQueryStringValue(Root, HonsenKey, 'AppId', RegisteredId) and
             (RegisteredId = '{#AppId}') and
             RegQueryStringValue(Root, HonsenKey, 'InstallLocation', Location);
+  if Result then begin
+    RegQueryStringValue(Root, HonsenKey, 'Version', ExistingVersion);
+    ExistingDamaged := not RegQueryStringValue(Root, HonsenKey, 'ExecutablePath', ExecutablePath) or not FileExists(ExecutablePath);
+  end;
+end;
+
+function FindExistingInRoot(Root: Integer): Boolean;
+begin
+  Result := False;
+  if IsWin64 then
+    Result := ReadRegisteredLocation(Root, 64, ExistingLocation);
+  if Result then begin
+    RegisteredRoot := Root;
+    RegisteredView := 64;
+    exit;
+  end;
+  Result := ReadRegisteredLocation(Root, 32, ExistingLocation);
+  if Result then begin
+    RegisteredRoot := Root;
+    RegisteredView := 32;
+  end;
 end;
 
 function FindExistingRegistration(): Boolean;
 begin
-  Result := ReadRegisteredLocation(HKLM, ExistingLocation);
-  if Result then begin
-    RegisteredRoot := HKLM;
-    exit;
-  end;
-  Result := ReadRegisteredLocation(HKCU, ExistingLocation);
-  if Result then
-    RegisteredRoot := HKCU;
+  Result := FindExistingInRoot(HKLM);
+  if not Result then
+    Result := FindExistingInRoot(HKCU);
 end;
 
 function InitializeSetup(): Boolean;
@@ -84,13 +104,22 @@ begin
   if FindExistingRegistration() then begin
     RequestedDirectory := ExpandConstant('{param:DIR}');
     if (RequestedDirectory <> '') and not SamePath(RequestedDirectory, ExistingLocation) then begin
-      SuppressibleMsgBox('{#AppName} is already installed at ' + ExistingLocation + '. Update or repair must use that directory.', mbError, MB_OK, IDOK);
+      SuppressibleMsgBox('{#AppName} ' + ExistingVersion + ' is already installed at ' + ExistingLocation + '. Update or repair must use that directory.', mbError, MB_OK, IDOK);
       Result := False;
     end;
+    if ExistingDamaged then
+      SuppressibleMsgBox('{#AppName} has a damaged installation at ' + ExistingLocation + '. Only repair in that directory is allowed.', mbInformation, MB_OK, IDOK);
   end else if IsAdminInstallMode then
     RegisteredRoot := HKLM
   else
     RegisteredRoot := HKCU;
+  if ExistingLocation = '' then begin
+    if IsWin64 then
+      RegisteredView := 64
+    else
+      RegisteredView := 32;
+  end;
+  SetRegView(RegisteredView);
 end;
 
 function DefaultInstallDir(Param: String): String;
@@ -117,6 +146,7 @@ end;
 
 procedure WriteHonsenValue(const Name, Value: String);
 begin
+  SetRegView(RegisteredView);
   RegWriteStringValue(HonsenRoot(), HonsenKey, Name, Value);
 end;
 
@@ -148,19 +178,24 @@ begin
     RegisterHonsenApp();
 end;
 
-procedure RemoveHonsenRegistration(Root: Integer);
+procedure RemoveHonsenRegistration(Root, View: Integer);
 var
   InstallLocation: String;
 begin
+  SetRegView(View);
   if RegQueryStringValue(Root, HonsenKey, 'InstallLocation', InstallLocation) and
-     (CompareText(InstallLocation, ExpandConstant('{app}')) = 0) then
+     SamePath(InstallLocation, ExpandConstant('{app}')) then
     RegDeleteKeyIncludingSubkeys(Root, HonsenKey);
 end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 begin
   if CurUninstallStep = usUninstall then begin
-    RemoveHonsenRegistration(HKCU);
-    RemoveHonsenRegistration(HKLM);
+    RemoveHonsenRegistration(HKCU, 32);
+    RemoveHonsenRegistration(HKLM, 32);
+    if IsWin64 then begin
+      RemoveHonsenRegistration(HKCU, 64);
+      RemoveHonsenRegistration(HKLM, 64);
+    end;
   end;
 end;

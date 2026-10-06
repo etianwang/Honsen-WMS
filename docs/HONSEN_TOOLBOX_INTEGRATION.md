@@ -23,15 +23,17 @@ HonsenUpdateRunner.exe launch --app-id honsen.wms --source toolbox --wait-pid 0 
 HonsenUpdateRunner.exe apply --source toolbox --app-id honsen.wms --wait-pid <PID> --installer <Setup.exe> --sha256 <SHA-256> --target-dir <InstallLocation> --expected-version <version> --restart false --operation-id <GUID> --result-path <JSON>
 ```
 
-`launch` 只校验本机注册信息和 manifest 后启动主程序，不联网。`apply` 不下载任何文件；它只处理工具箱已下载、已校验并经用户两次确认后的安装包。Runner 会复制自身到 `%TEMP%\Honsen Program\UpdateRunner\<GUID>`、取得全局互斥锁、校验 SHA-256、等待/校验 WMS 进程、静默运行安装器，并校验版本、路径和 JSON 后原子写入结果 JSON。
+`launch` 只校验本机注册信息和 manifest 后启动主程序，不联网。`apply` 不下载任何文件；它只处理调用方已下载、已校验的安装包。Runner 会复制自身到 `%TEMP%\Honsen Program\UpdateRunner\<GUID>`、取得全局互斥锁、校验 SHA-256、等待/校验 WMS 进程，并在机器范围安装需要权限时自行触发 UAC，再校验版本、路径和 JSON 后原子写入调用方指定的结果 JSON。
+
+结果文件必须由调用方传入；推荐路径为 `%LOCALAPPDATA%\Honsen Program\UpdateResults\honsen.wms\<GUID>.json`。成功和失败均使用跨项目协议规定的 `fromVersion`、`toVersion`、`step`、`installerExitCode`、`installerLogPath`、`message`、`completedAtUtc` 字段。
 
 ## 验证结果
 
 | 场景 | 结果 |
 | --- | --- |
-| Windows CI 编译 | 通过：`v1.2.3` 安装器、Runner、便携包和 `.sha256` 均已生成。 |
+| Windows CI 编译 | 待 `v1.2.4` 的最新协议修复提交完成后复核。 |
 | 首次静默安装到指定目录 | 通过：`/DIR` 指向工作区测试目录后，HKCU 注册表、主 EXE、Runner 和 UTF-8 manifest 均存在且一致。 |
-| Runner `apply` | 已完成静态/构建验证；本机端到端调用被执行环境的进程安全策略拦截，命令未启动。工具箱可在受控 Windows 环境按上面的命令复测。 |
+| Runner `apply` | 已完成静态验证；需在 `v1.2.4` 的受控 Windows 环境按上面的命令复测。 |
 | 静默卸载 | 通过：Inno `unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-` 移除了测试目录及 `honsen.wms` 的 HKCU 注册项。 |
 | 未确认不更新 | 通过设计：WMS 与 Runner 均无网络下载代码；只有工具箱显式调用 `apply` 才会进入安装路径。 |
 | launch 不自动更新 | 通过代码检查：`launch` 仅读取注册信息/manifest 并启动主 EXE，不访问网络。 |
