@@ -62,6 +62,8 @@ python desktop/launcher.py
 # 输出：dist\Honsen海外仓库管理同步版.exe、便携 zip、Inno Setup.exe
 ```
 
+正式 GitHub Release 仅发布 `HonsenWMS-<版本>-Setup.exe` 及其 `.sha256`；主程序、便携版和更新 Runner 均由安装器管理，不作为 Release 资产。
+
 Windows 安装、升级、卸载及 Honsen 工具箱识别协议见 [docs/honsen-toolbox-protocol.md](docs/honsen-toolbox-protocol.md)。
 
 数据库：`db/honsen_storage.db`（exe 旁 `db/` 目录）。初始化见 React 登录页「初始化数据库」。
