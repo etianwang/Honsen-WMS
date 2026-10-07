@@ -22,6 +22,7 @@ OutputBaseFilename=HonsenWMS-{#AppVersion}-Setup
 Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=commandline
 UninstallDisplayName={#AppName}
