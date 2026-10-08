@@ -4,6 +4,7 @@
 #endif
 
 #define AppName "Honsen WMS"
+#define ShortcutName "Honsen仓管系统"
 #define AppId "honsen.wms"
 #define AppExeName "Honsen海外仓库管理同步版.exe"
 #define RunnerExeName "HonsenUpdateRunner.exe"
@@ -33,8 +34,12 @@ Source: "..\dist\{#RunnerExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\honsen.app.json"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#RunnerExeName}"; Parameters: "launch --app-id {#AppId} --source shell"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#RunnerExeName}"; Parameters: "launch --app-id {#AppId} --source shell"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#ShortcutName}"; Filename: "{app}\{#RunnerExeName}"; Parameters: "launch --app-id {#AppId} --source shell"
+Name: "{autodesktop}\{#ShortcutName}"; Filename: "{app}\{#RunnerExeName}"; Parameters: "launch --app-id {#AppId} --source shell"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
+
+[InstallDelete]
+Type: files; Name: "{autoprograms}\{#AppName}.lnk"
+Type: files; Name: "{autodesktop}\{#AppName}.lnk"
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"
