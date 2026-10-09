@@ -1,4 +1,4 @@
-; Compile with: ISCC.exe /DAppVersion=1.2.5 installer\HonsenWMS.iss
+; Compile with: ISCC.exe /DAppVersion=1.2.6 installer\HonsenWMS.iss
 #ifndef AppVersion
   #error AppVersion must be supplied by the build script.
 #endif
@@ -24,7 +24,7 @@ Compression=lzma2
 SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-PrivilegesRequired=lowest
+PrivilegesRequired=admin
 PrivilegesRequiredOverridesAllowed=commandline
 UninstallDisplayName={#AppName}
 
@@ -168,6 +168,8 @@ function DefaultInstallDir(Param: String): String;
 begin
   if ExistingLocation <> '' then
     Result := ExistingLocation
+  else if not IsAdminInstallMode then
+    Result := ExpandConstant('{localappdata}\Honsen Program\Honsen WMS')
   else
     Result := ExpandConstant('{autopf}\Honsen Program\Honsen WMS');
 end;
