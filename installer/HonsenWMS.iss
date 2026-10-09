@@ -1,4 +1,4 @@
-; Compile with: ISCC.exe /DAppVersion=1.2.4 installer\HonsenWMS.iss
+; Compile with: ISCC.exe /DAppVersion=1.2.5 installer\HonsenWMS.iss
 #ifndef AppVersion
   #error AppVersion must be supplied by the build script.
 #endif

@@ -144,7 +144,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   >
                     退出登录
                   </button>
-                  <div className="mt-2 text-[10px] opacity-60">Ver v1.2.4</div>
+                  <div className="mt-2 text-[10px] opacity-60">Ver v1.2.5</div>
                 </div>
               </BorderGlow>
             </div>

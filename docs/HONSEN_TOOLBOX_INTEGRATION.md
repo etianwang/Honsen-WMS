@@ -31,9 +31,9 @@ HonsenUpdateRunner.exe apply --source toolbox --app-id honsen.wms --wait-pid <PI
 
 | 场景 | 结果 |
 | --- | --- |
-| Windows CI 编译 | 待 `v1.2.4` 的最新协议修复提交完成后复核。 |
+| Windows CI 编译 | 待 `v1.2.5` 的新图标发布构建完成后复核。 |
 | 首次静默安装到指定目录 | 通过：`/DIR` 指向工作区测试目录后，HKCU 注册表、主 EXE、Runner 和 UTF-8 manifest 均存在且一致。 |
-| Runner `apply` | 已完成静态验证；需在 `v1.2.4` 的受控 Windows 环境按上面的命令复测。 |
+| Runner `apply` | 已完成静态验证；需在 `v1.2.5` 的受控 Windows 环境按上面的命令复测。 |
 | 静默卸载 | 通过：Inno `unins000.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-` 移除了测试目录及 `honsen.wms` 的 HKCU 注册项。 |
 | 未确认不更新 | 通过设计：WMS 与 Runner 均无网络下载代码；只有工具箱显式调用 `apply` 才会进入安装路径。 |
 | launch 不自动更新 | 通过代码检查：`launch` 仅读取注册信息/manifest 并启动主 EXE，不访问网络。 |
